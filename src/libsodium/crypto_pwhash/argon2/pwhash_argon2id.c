@@ -396,7 +396,7 @@ crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTE
 
     return argon2_encode_relief_server_str_portion(&out[last_out_delim_loc],
                                                    crypto_pwhash_argon2id_relief_STRBYTES - last_out_delim_loc,
-                                                   server_hash, 32, server_opslimit, server_memlimit);
+                                                   (unsigned char*)server_hash, 32, server_opslimit, server_memlimit);
 
 
 }
