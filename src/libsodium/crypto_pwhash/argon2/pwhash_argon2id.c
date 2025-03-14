@@ -228,6 +228,98 @@ crypto_pwhash_argon2id_salt_str(char out[crypto_pwhash_argon2id_STRBYTES],
 }
 
 int
+crypto_pwhash_argon2id_relief_server_init_str(char out[crypto_pwhash_argon2id_STRBYTES], const char *const relief_str)
+{
+//    size_t rstr_len;
+//    size_t rstr_pos=0;
+//    uint32_t version;
+//    const char * str = relief_str;
+///* Prefix checking */
+//#define CC(prefix)                               \
+//    do {                                         \
+//        size_t cc_len = strlen(prefix);          \
+//        if (strncmp(str, prefix, cc_len) != 0) { \
+//            return ARGON2_DECODING_FAIL;         \
+//        }                                        \
+//        str += cc_len;                           \
+//    } while ((void) 0, 0)
+//
+///* Optional prefix checking with supplied code */
+//#define CC_opt(prefix, code)                     \
+//    do {                                         \
+//        size_t cc_len = strlen(prefix);          \
+//        if (strncmp(str, prefix, cc_len) == 0) { \
+//            str += cc_len;                       \
+//            {                                    \
+//                code;                            \
+//            }                                    \
+//        }                                        \
+//    } while ((void) 0, 0)
+//
+///* Decoding prefix into decimal */
+//#define DECIMAL(x)                         \
+//    do {                                   \
+//        unsigned long dec_x;               \
+//        str = decode_decimal(str, &dec_x); \
+//        if (str == NULL) {                 \
+//            return ARGON2_DECODING_FAIL;   \
+//        }                                  \
+//        (x) = dec_x;                       \
+//    } while ((void) 0, 0)
+//
+///* Decoding prefix into uint32_t decimal */
+//#define DECIMAL_U32(x)                           \
+//    do {                                         \
+//        unsigned long dec_x;                     \
+//        str = decode_decimal(str, &dec_x);       \
+//        if (str == NULL || dec_x > UINT32_MAX) { \
+//            return ARGON2_DECODING_FAIL;         \
+//        }                                        \
+//        (x) = (uint32_t)dec_x;                   \
+//    } while ((void)0, 0)
+//
+///* Decoding base64 into a binary buffer */
+//#define BIN(buf, max_len, len)                                                   \
+//    do {                                                                         \
+//        size_t bin_len = (max_len);                                              \
+//        const char *str_end;                                                     \
+//        if (sodium_base642bin((buf), (max_len), str, strlen(str), NULL,          \
+//                              &bin_len, &str_end,                                \
+//                              sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0 || \
+//            bin_len > UINT32_MAX) {                                              \
+//            return ARGON2_DECODING_FAIL;                                         \
+//        }                                                                        \
+//        (len) = (uint32_t) bin_len;                                              \
+//        str = str_end;                                                           \
+//    } while ((void) 0, 0)
+//
+//
+//
+//    //58 is min length of parseable relief_str "r$argon2id$v=19$m=8,t=1,p=1$s:$argon2id$v=19$m=8,t=1,p=1$h\0"
+//    const size_t MIN_RSTR_LEN = 59;
+//
+    memset(out, 0, crypto_pwhash_argon2id_STRBYTES);
+//    rstr_len = strlen(relief_str);
+//    if (rstr_len < MIN_RSTR_LEN) {
+//        return ARGON2_DECODING_LENGTH_FAIL;
+//    }
+//    if (relief_str[rstr_pos++] != 'r') {
+//        return ARGON2_DECODING_FAIL;
+//    }
+//    CC(crypto_pwhash_argon2id_STRPREFIX);
+//    CC("$v=");
+//    DECIMAL_U32(version);
+//
+//    return ARGON2_OK;
+//#undef CC
+//#undef CC_opt
+//#undef DECIMAL
+//#undef BIN
+
+    return 0;
+}
+
+int
 crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTES],
                                   const char *const pwhash_str,
                                   unsigned long long client_opslimit, size_t client_memlimit,
@@ -237,7 +329,7 @@ crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTE
     int decode_result;
     int fast_pwhash_result;
 
-    char sub_str[crypto_pwhash_argon2id_relief_STRBYTES];
+    char server_hash[32];
 
     size_t encoded_len;
     size_t last_out_delim_loc = 0;
@@ -245,27 +337,6 @@ crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTE
     size_t sub_str_salt_loc = 0;
     size_t sub_str_hash_len = 0;
 
-#define RDELIMN(var, str, start_loc, token, n) do{   \
-    var = 0;\
-    size_t count = n;\
-    for (size_t i = start_loc - 1; i > 0; --i) {\
-        if (str[i] == token && --count==0) {\
-            var = i;\
-            break;\
-        }\
-    } \
-    } while (0)
-
-#define DELIMN(var, str, start_loc, token, n) do{   \
-    var = 0;\
-    size_t count = n;\
-    for (size_t i = start_loc - 1; i < crypto_pwhash_argon2id_relief_STRBYTES; ++i) {\
-        if (str[i] == token && --count==0) {\
-            var = i;\
-            break;\
-        }\
-    } \
-    } while (0)
 
     out[0] = 'r';
     memset(++out, 0, crypto_pwhash_argon2id_relief_STRBYTES - 1);
@@ -308,27 +379,26 @@ crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTE
         free(ctx.out);
         return ARGON2_INCORRECT_PARAMETER;
     }
+    last_out_delim_loc = crypto_pwhash_argon2id_relief_STRBYTES;
+    while (pwhash_str[last_out_delim_loc--] != '$');
 
-    RDELIMN(last_out_delim_loc, pwhash_str, crypto_pwhash_argon2id_relief_STRBYTES, '$', 1);
     memcpy(out, pwhash_str, last_out_delim_loc);
     out[last_out_delim_loc++] = ':';
-    // out[last_out_delim_loc++] = '$';
 
-
-    fast_pwhash_result = crypto_pwhash_argon2id_salt_str(sub_str, (const char *) ctx.out, ctx.outlen, ctx.salt,
-                                                         server_opslimit, server_memlimit);
-
-    RDELIMN(sub_str_hash_loc, sub_str, crypto_pwhash_argon2id_STRBYTES, '$', 1);
-    RDELIMN(sub_str_salt_loc, sub_str, sub_str_hash_loc, '$', 1);
-    sub_str_hash_len = strlen(&sub_str[sub_str_hash_loc]);
-    memmove(&sub_str[sub_str_salt_loc], &sub_str[sub_str_hash_loc], sub_str_hash_len);
-    memcpy(&out[last_out_delim_loc], sub_str, sub_str_hash_len + sub_str_salt_loc);
-
+    fast_pwhash_result = crypto_pwhash_argon2id(server_hash, 32, (const char *) ctx.out, ctx.outlen, ctx.salt,
+                                                server_opslimit, server_memlimit,
+                                                crypto_pwhash_argon2id_ALG_ARGON2ID13);
     free(ctx.salt);
     free(ctx.out);
-    return fast_pwhash_result;
-#undef DELIMN
-#undef RDELIMN
+
+    if (fast_pwhash_result != 0)
+        return fast_pwhash_result;
+
+    return argon2_encode_relief_server_str_portion(&out[last_out_delim_loc],
+                                                   crypto_pwhash_argon2id_relief_STRBYTES - last_out_delim_loc,
+                                                   server_hash, 32, server_opslimit, server_memlimit);
+
+
 }
 
 int

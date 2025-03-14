@@ -31,5 +31,13 @@ int argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx,
  */
 int argon2_decode_string(argon2_context *ctx, const char *str,
                          argon2_type type);
+/*
+ *
+ * TODO
+ */
+int argon2_encode_relief_server_str_portion(char *dst, size_t dst_len,
+                                        unsigned char *const server_hash, unsigned long long server_hashlen,
+                                        unsigned long long server_opslimit, size_t server_memlimit);
+
 
 #endif

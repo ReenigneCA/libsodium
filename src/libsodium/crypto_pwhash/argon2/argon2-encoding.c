@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 /*
@@ -38,8 +39,8 @@
 static const char *
 decode_decimal(const char *str, unsigned long *v)
 {
-    const char    *orig;
-    unsigned long  acc;
+    const char *orig;
+    unsigned long acc;
 
     acc = 0;
     for (orig = str;; str++) {
@@ -152,13 +153,13 @@ argon2_decode_string(argon2_context *ctx, const char *str, argon2_type type)
         str = str_end;                                                           \
     } while ((void) 0, 0)
 
-    size_t        maxsaltlen = ctx->saltlen;
-    size_t        maxoutlen  = ctx->outlen;
-    int           validation_result;
-    uint32_t      version = 0;
+    size_t maxsaltlen = ctx->saltlen;
+    size_t maxoutlen = ctx->outlen;
+    int validation_result;
+    uint32_t version = 0;
 
     ctx->saltlen = 0;
-    ctx->outlen  = 0;
+    ctx->outlen = 0;
 
     if (type == Argon2_id) {
         CC("$argon2id");
@@ -213,7 +214,7 @@ argon2_decode_string(argon2_context *ctx, const char *str, argon2_type type)
 static void
 u32_to_string(char *str, uint32_t x)
 {
-    char   tmp[U32_STR_MAXSIZE - 1U];
+    char tmp[U32_STR_MAXSIZE - 1U];
     size_t i;
 
     i = sizeof tmp;
@@ -275,9 +276,11 @@ argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx,
 
     switch (type) {
     case Argon2_id:
-        SS("$argon2id$v="); break;
+        SS("$argon2id$v=");
+        break;
     case Argon2_i:
-        SS("$argon2i$v="); break;
+        SS("$argon2i$v=");
+        break;
     default:
         return ARGON2_ENCODING_FAIL;
     }
@@ -300,7 +303,74 @@ argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx,
     SB(ctx->out, ctx->outlen);
     return ARGON2_OK;
 
-#undef SS
-#undef SX
-#undef SB
+
 }
+
+/*
+ * TODO
+ * regular -> relief
+ * relief -> server regular
+ * relief_verify
+ *
+ */
+/*
+ * TODO
+ */
+int
+argon2_encode_relief_server_str_portion(char *dst, size_t dst_len,
+                                        unsigned char *const server_hash, unsigned long long server_hashlen,
+                                        unsigned long long server_opslimit, size_t server_memlimit)
+{
+    char int_buf[U32_STR_MAXSIZE];
+#define add_str(str) do{                \
+      size_t str_len = strlen(str);     \
+      if (str_len > dst_len)            \
+            return ARGON2_ENCODING_FAIL;\
+      dst_len -= str_len;               \
+      memcpy(dst,str,str_len);          \
+      dst += str_len;                   \
+} while(0)
+
+#define add_int(ival) do{               \
+      u32_to_string(int_buf,ival);      \
+      add_str(int_buf);                 \
+    } while(0)
+    add_str("$argon2id$v=");
+    add_int(ARGON2_VERSION_NUMBER);
+    add_str("$m=");
+    add_int(server_memlimit/1024);
+    add_str(",t=");
+    add_int(server_opslimit);
+    add_str(",p=1$");
+    if(sodium_bin2base64(dst,dst_len,server_hash,server_hashlen,sodium_base64_VARIANT_ORIGINAL_NO_PADDING)==NULL)
+        return ARGON2_ENCODING_FAIL;
+    char test_buf[64];
+    memset(test_buf,0,64);
+    snprintf(test_buf,64,"hello world %d",server_opslimit);
+    return ARGON2_OK;
+}
+
+/*
+ * #define RDELIMN(var, str, start_loc, token, n) do{   \
+    var = 0;\
+    size_t count = n;\
+    for (size_t i = start_loc - 1; i > 0; --i) {\
+        if (str[i] == token && --count==0) {\
+            var = i;\
+            break;\
+        }\
+    } \
+    } while (0)
+
+#define DELIMN(var, str, start_loc, token, n) do{   \
+    var = 0;\
+    size_t count = n;\
+    for (size_t i = start_loc - 1; i < crypto_pwhash_argon2id_relief_STRBYTES; ++i) {\
+        if (str[i] == token && --count==0) {\
+            var = i;\
+            break;\
+        }\
+    } \
+    } while (0)
+ */
+

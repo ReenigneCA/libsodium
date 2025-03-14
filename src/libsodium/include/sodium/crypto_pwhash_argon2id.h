@@ -42,7 +42,7 @@ size_t crypto_pwhash_argon2id_saltbytes(void);
 SODIUM_EXPORT
 size_t crypto_pwhash_argon2id_strbytes(void);
 
-#define crypto_pwhash_argon2id_relief_STRBYTES 128U
+#define crypto_pwhash_argon2id_relief_STRBYTES 256U
 SODIUM_EXPORT
         size_t crypto_pwhash_argon2id_strbytes(void);
 
@@ -116,6 +116,10 @@ crypto_pwhash_argon2id_salt_str(char out[crypto_pwhash_argon2id_STRBYTES],
                                 const unsigned char * const salt,
                                 unsigned long long opslimit, size_t memlimit)
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int crypto_pwhash_argon2id_relief_server_init_str(char out[crypto_pwhash_argon2id_STRBYTES],const char * relief_str)
+__attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
 
 SODIUM_EXPORT
 int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTES],
