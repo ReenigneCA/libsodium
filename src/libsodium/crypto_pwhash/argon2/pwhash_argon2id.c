@@ -66,7 +66,7 @@ crypto_pwhash_argon2id_strbytes(void)
 size_t
 crypto_pwhash_argon2id_relief_strbytes(void)
 {
-    return crypto_pwhash_argon2id_STRBYTES;
+    return crypto_pwhash_argon2id_relief_STRBYTES;
 }
 
 const char *

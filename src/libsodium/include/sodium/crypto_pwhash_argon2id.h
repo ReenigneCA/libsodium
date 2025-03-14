@@ -42,9 +42,9 @@ size_t crypto_pwhash_argon2id_saltbytes(void);
 SODIUM_EXPORT
 size_t crypto_pwhash_argon2id_strbytes(void);
 
-#define crypto_pwhash_argon2id_relief_STRBYTES 256U
+#define crypto_pwhash_argon2id_relief_STRBYTES 192U
 SODIUM_EXPORT
-        size_t crypto_pwhash_argon2id_strbytes(void);
+        size_t crypto_pwhash_argon2id_relief_strbytes(void);
 
 #define crypto_pwhash_argon2id_STRPREFIX "$argon2id$"
 SODIUM_EXPORT
