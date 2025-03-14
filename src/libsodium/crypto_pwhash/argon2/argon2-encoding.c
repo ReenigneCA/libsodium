@@ -346,7 +346,8 @@ argon2_encode_relief_server_str_portion(char *dst, size_t dst_len,
         return ARGON2_ENCODING_FAIL;
     char test_buf[64];
     memset(test_buf,0,64);
-    snprintf(test_buf,64,"hello world %d",server_opslimit);
+    //this is just a garbage call to see if code using snprintf will compile with all the libsodium ci tests.
+    snprintf(test_buf,64,"hello world %d",(int)server_opslimit);
     return ARGON2_OK;
 }
 
