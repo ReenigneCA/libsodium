@@ -385,7 +385,7 @@ crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTE
     memcpy(out, pwhash_str, last_out_delim_loc);
     out[last_out_delim_loc++] = ':';
 
-    fast_pwhash_result = crypto_pwhash_argon2id(server_hash, 32, (const char *) ctx.out, ctx.outlen, ctx.salt,
+    fast_pwhash_result = crypto_pwhash_argon2id((unsigned char *)server_hash, 32, (const char *) ctx.out, ctx.outlen, ctx.salt,
                                                 server_opslimit, server_memlimit,
                                                 crypto_pwhash_argon2id_ALG_ARGON2ID13);
     free(ctx.salt);
