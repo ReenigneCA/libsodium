@@ -23,6 +23,7 @@
 #include "argon2-core.h"
 #include "argon2-encoding.h"
 #include "argon2.h"
+#include "crypto_pwhash_argon2id.h"
 
 int
 argon2_ctx(argon2_context *context, argon2_type type)
@@ -221,8 +222,8 @@ argon2_verify(const char *encoded, const void *pwd, const size_t pwdlen,
     ctx.secretlen = 0;
 
     /* max values, to be updated in argon2_decode_string */
-    encoded_len = strlen(encoded);
-    if (encoded_len > UINT32_MAX) {
+    encoded_len = strnlen(encoded,crypto_pwhash_argon2id_STRBYTES);
+    if (encoded_len > UINT32_MAX || encoded_len == crypto_pwhash_argon2id_STRBYTES) {
         return ARGON2_DECODING_LENGTH_FAIL;
     }
     ctx.adlen   = (uint32_t) encoded_len;

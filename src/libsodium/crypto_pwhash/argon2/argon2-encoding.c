@@ -1,10 +1,10 @@
 #include "argon2-encoding.h"
 #include "argon2-core.h"
 #include "utils.h"
-#include <limits.h>
+#include "crypto_pwhash_argon2id.h"
 #include <stddef.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 /*
  * Example code for a decoder and encoder of "hash strings", with Argon2
@@ -27,44 +27,6 @@
  */
 
 /* ==================================================================== */
-
-/*
- * Decode decimal integer from 'str'; the value is written in '*v'.
- * Returned value is a pointer to the next non-decimal character in the
- * string. If there is no digit at all, or the value encoding is not
- * minimal (extra leading zeros), or the value does not fit in an
- * 'unsigned long', then NULL is returned.
- */
-static const char *
-decode_decimal(const char *str, unsigned long *v)
-{
-    const char    *orig;
-    unsigned long  acc;
-
-    acc = 0;
-    for (orig = str;; str++) {
-        int c;
-
-        c = *str;
-        if (c < '0' || c > '9') {
-            break;
-        }
-        c -= '0';
-        if (acc > (ULONG_MAX / 10)) {
-            return NULL;
-        }
-        acc *= 10;
-        if ((unsigned long) c > (ULONG_MAX - acc)) {
-            return NULL;
-        }
-        acc += (unsigned long) c;
-    }
-    if (str == orig || (*orig == '0' && str != (orig + 1))) {
-        return NULL;
-    }
-    *v = acc;
-    return str;
-}
 
 /* ==================================================================== */
 /*
@@ -93,136 +55,63 @@ decode_decimal(const char *str, unsigned long *v)
 int
 argon2_decode_string(argon2_context *ctx, const char *str, argon2_type type)
 {
-/* Prefix checking */
-#define CC(prefix)                               \
-    do {                                         \
-        size_t cc_len = strlen(prefix);          \
-        if (strncmp(str, prefix, cc_len) != 0) { \
-            return ARGON2_DECODING_FAIL;         \
-        }                                        \
-        str += cc_len;                           \
-    } while ((void) 0, 0)
+    int validation_result;
+    int out_loc=0;
+    int salt_loc=0;
+    size_t str_len;
 
-/* Optional prefix checking with supplied code */
-#define CC_opt(prefix, code)                     \
-    do {                                         \
-        size_t cc_len = strlen(prefix);          \
-        if (strncmp(str, prefix, cc_len) == 0) { \
-            str += cc_len;                       \
-            {                                    \
-                code;                            \
-            }                                    \
-        }                                        \
-    } while ((void) 0, 0)
+    uint32_t version = 0;
 
-/* Decoding prefix into decimal */
-#define DECIMAL(x)                         \
-    do {                                   \
-        unsigned long dec_x;               \
-        str = decode_decimal(str, &dec_x); \
-        if (str == NULL) {                 \
-            return ARGON2_DECODING_FAIL;   \
-        }                                  \
-        (x) = dec_x;                       \
-    } while ((void) 0, 0)
+    str_len = strnlen(str, crypto_pwhash_argon2id_STRBYTES - 1);
 
-/* Decoding prefix into uint32_t decimal */
-#define DECIMAL_U32(x)                           \
-    do {                                         \
-        unsigned long dec_x;                     \
-        str = decode_decimal(str, &dec_x);       \
-        if (str == NULL || dec_x > UINT32_MAX) { \
-            return ARGON2_DECODING_FAIL;         \
-        }                                        \
-        (x) = (uint32_t)dec_x;                   \
-    } while ((void)0, 0)
+    if (str_len == crypto_pwhash_argon2id_STRBYTES - 1)
+        return ARGON2_DECODING_FAIL;
 
-/* Decoding base64 into a binary buffer */
-#define BIN(buf, max_len, len)                                                   \
-    do {                                                                         \
-        size_t bin_len = (max_len);                                              \
-        const char *str_end;                                                     \
-        if (sodium_base642bin((buf), (max_len), str, strlen(str), NULL,          \
-                              &bin_len, &str_end,                                \
-                              sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0 || \
-            bin_len > UINT32_MAX) {                                              \
-            return ARGON2_DECODING_FAIL;                                         \
-        }                                                                        \
-        (len) = (uint32_t) bin_len;                                              \
-        str = str_end;                                                           \
-    } while ((void) 0, 0)
-
-    size_t        maxsaltlen = ctx->saltlen;
-    size_t        maxoutlen  = ctx->outlen;
-    int           validation_result;
-    uint32_t      version = 0;
-
-    ctx->saltlen = 0;
-    ctx->outlen  = 0;
-
-    if (type == Argon2_id) {
-        CC("$argon2id");
-    } else if (type == Argon2_i) {
-        CC("$argon2i");
-    } else {
-        return ARGON2_INCORRECT_TYPE;
+    switch (type) {
+    case Argon2_id:
+        validation_result = sscanf(str, "$argon2id$v=%u$m=%u,t=%u,p=%u$%n%*[^$]$%n", &version, &ctx->m_cost,
+                                   &ctx->t_cost, &ctx->lanes, &salt_loc, &out_loc);
+        break;
+    case Argon2_i:
+        validation_result = sscanf(str, "$argon2i$v=%u$m=%u,t=%u,p=%u$%n%*[^$]$%n", &version, &ctx->m_cost,
+                                   &ctx->t_cost, &ctx->lanes, &salt_loc, &out_loc);
+        break;
+    default:
+        return ARGON2_INCORRECT_PARAMETER;
     }
-    CC("$v=");
-    DECIMAL_U32(version);
-    if (version != ARGON2_VERSION_NUMBER) {
+
+    if (validation_result != 4)
+        return ARGON2_DECODING_FAIL;
+    if (version != ARGON2_VERSION_NUMBER)
         return ARGON2_INCORRECT_TYPE;
+    if (salt_loc > crypto_pwhash_argon2id_STRBYTES || out_loc > crypto_pwhash_argon2id_STRBYTES || salt_loc == 0 ||
+        out_loc == 0) {
+        return ARGON2_DECODING_FAIL;
     }
-    CC("$m=");
-    DECIMAL_U32(ctx->m_cost);
-    if (ctx->m_cost > UINT32_MAX) {
-        return ARGON2_INCORRECT_TYPE;
-    }
-    CC(",t=");
-    DECIMAL_U32(ctx->t_cost);
-    if (ctx->t_cost > UINT32_MAX) {
-        return ARGON2_INCORRECT_TYPE;
-    }
-    CC(",p=");
-    DECIMAL_U32(ctx->lanes);
-    if (ctx->lanes > UINT32_MAX) {
-        return ARGON2_INCORRECT_TYPE;
-    }
+
     ctx->threads = ctx->lanes;
 
-    CC("$");
-    BIN(ctx->salt, maxsaltlen, ctx->saltlen);
-    CC("$");
-    BIN(ctx->out, maxoutlen, ctx->outlen);
+
+    size_t bin_len;
+
+    if (sodium_base642bin(ctx->salt, ctx->saltlen, &str[salt_loc], (out_loc - salt_loc) - 1, NULL, &bin_len, NULL,
+                          sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0)
+        return ARGON2_DECODING_FAIL;
+
+    ctx->saltlen = (uint32_t) bin_len;
+    if (sodium_base642bin(ctx->out, ctx->outlen, &str[out_loc], str_len - out_loc, NULL, &bin_len, NULL,
+                          sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0)
+        return ARGON2_DECODING_FAIL;
+    ctx->outlen = (uint32_t) bin_len;
+    // The previous checks in this function were either impossible
+    // to fail (a uint32 can't be greater than the max uint32...)
+    // or get rechecked in this validation function anyway.
     validation_result = argon2_validate_inputs(ctx);
     if (validation_result != ARGON2_OK) {
         return validation_result;
     }
-    if (*str == 0) {
-        return ARGON2_OK;
-    }
-    return ARGON2_DECODING_FAIL;
-
-#undef CC
-#undef CC_opt
-#undef DECIMAL
-#undef BIN
-}
-
-#define U32_STR_MAXSIZE 11U
-
-static void
-u32_to_string(char *str, uint32_t x)
-{
-    char   tmp[U32_STR_MAXSIZE - 1U];
-    size_t i;
-
-    i = sizeof tmp;
-    do {
-        tmp[--i] = (x % (uint32_t) 10U) + '0';
-        x /= (uint32_t) 10U;
-    } while (x != 0U && i != 0U);
-    memcpy(str, &tmp[i], (sizeof tmp) - i);
-    str[(sizeof tmp) - i] = 0;
+    //because the code uses strnlen now the null check is redundant
+    return ARGON2_OK;
 }
 
 /*
@@ -238,69 +127,43 @@ u32_to_string(char *str, uint32_t x)
  * On success, ARGON2_OK is returned.
  */
 int
-argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx,
-                     argon2_type type)
+argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx, argon2_type type)
 {
-#define SS(str)                          \
-    do {                                 \
-        size_t pp_len = strlen(str);     \
-        if (pp_len >= dst_len) {         \
-            return ARGON2_ENCODING_FAIL; \
-        }                                \
-        memcpy(dst, str, pp_len + 1);    \
-        dst += pp_len;                   \
-        dst_len -= pp_len;               \
-    } while ((void) 0, 0)
-
-#define SX(x)                      \
-    do {                           \
-        char tmp[U32_STR_MAXSIZE]; \
-        u32_to_string(tmp, x);     \
-        SS(tmp);                   \
-    } while ((void) 0, 0)
-
-#define SB(buf, len)                                                                \
-    do {                                                                            \
-        size_t sb_len;                                                              \
-        if (sodium_bin2base64(dst, dst_len, (buf), (len),                           \
-                              sodium_base64_VARIANT_ORIGINAL_NO_PADDING) == NULL) { \
-            return ARGON2_ENCODING_FAIL;                                            \
-        }                                                                           \
-        sb_len = strlen(dst);                                                       \
-        dst += sb_len;                                                              \
-        dst_len -= sb_len;                                                          \
-    } while ((void) 0, 0)
-
     int validation_result;
+    int dst_loc = 0;
+    const char *argon_code;
+
 
     switch (type) {
     case Argon2_id:
-        SS("$argon2id$v="); break;
+        argon_code = "id";
+        break;
     case Argon2_i:
-        SS("$argon2i$v="); break;
+        argon_code = "i";
+        break;
     default:
         return ARGON2_ENCODING_FAIL;
     }
+
     validation_result = argon2_validate_inputs(ctx);
     if (validation_result != ARGON2_OK) {
         return validation_result;
     }
-    SX(ARGON2_VERSION_NUMBER);
-    SS("$m=");
-    SX(ctx->m_cost);
-    SS(",t=");
-    SX(ctx->t_cost);
-    SS(",p=");
-    SX(ctx->lanes);
 
-    SS("$");
-    SB(ctx->salt, ctx->saltlen);
+    dst_loc = snprintf(dst, dst_len, "$argon2%s$v=%u$m=%u,t=%u,p=%u$", argon_code, ARGON2_VERSION_NUMBER, ctx->m_cost,
+                       ctx->t_cost, ctx->lanes);
+    if (dst_loc < 0)
+        return ARGON2_ENCODING_FAIL;
+    if (sodium_bin2base64(&dst[dst_loc], dst_len - dst_loc, ctx->salt, ctx->saltlen,
+                          sodium_base64_VARIANT_ORIGINAL_NO_PADDING) == NULL) {
+        return ARGON2_ENCODING_FAIL;
+    }
+    dst_loc += sodium_base64_ENCODED_LEN(ctx->saltlen, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+    dst[dst_loc - 1] = '$';
+    if (sodium_bin2base64(&dst[dst_loc], dst_len - dst_loc, ctx->out, ctx->outlen,
+                          sodium_base64_VARIANT_ORIGINAL_NO_PADDING) == NULL) {
+        return ARGON2_ENCODING_FAIL;
+    }
 
-    SS("$");
-    SB(ctx->out, ctx->outlen);
     return ARGON2_OK;
-
-#undef SS
-#undef SX
-#undef SB
 }

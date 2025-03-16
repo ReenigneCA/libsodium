@@ -250,7 +250,7 @@ _needs_rehash(const char *str, unsigned long long opslimit, size_t memlimit,
     size_t          fodder_len;
     int             ret = -1;
 
-    fodder_len = strlen(str);
+    fodder_len = strnlen(str,crypto_pwhash_argon2id_STRBYTES);
     memlimit /= 1024U;
     if (opslimit > UINT32_MAX || memlimit > UINT32_MAX ||
         fodder_len >= crypto_pwhash_STRBYTES) {
