@@ -125,6 +125,7 @@ int crypto_pwhash_str(char out[crypto_pwhash_STRBYTES],
 SODIUM_EXPORT
 int crypto_pwhash_relief_str(char out[crypto_pwhash_relief_STRBYTES],
                              const char * const pwhash_str,
+                             uint8_t salt[crypto_pwhash_argon2id_SALTBYTES],
                              unsigned long long client_opslimit, size_t client_memlimit,
                              unsigned long long server_opslimit, size_t server_memlimit)
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));

@@ -3,6 +3,7 @@
 
 #include "argon2.h"
 #include "private/quirks.h"
+#include "crypto_pwhash.h"
 
 /*
  * encode an Argon2 hash string into the provided buffer. 'dst_len'
@@ -31,13 +32,23 @@ int argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx,
  */
 int argon2_decode_string(argon2_context *ctx, const char *str,
                          argon2_type type);
+
+int argon2_relief_encode_init_str(char *dst, size_t dst_len, argon2_type type,
+                                  const unsigned char * salt,
+                                  size_t salt_len,
+                                  unsigned long long client_opslimit,
+                                  size_t client_memlimit);
+
 /*
  *
  * TODO
  */
-int argon2_encode_relief_server_str_portion(char *dst, size_t dst_len,
-                                        unsigned char *const server_hash, unsigned long long server_hashlen,
-                                        unsigned long long server_opslimit, size_t server_memlimit);
+int
+argon2_encode_relief_server_str(uint8_t out[crypto_pwhash_argon2id_relief_STRBYTES], const uint8_t *client_str,
+                                size_t client_str_len,
+                                unsigned char *const server_hash, size_t server_hashlen,
+                                uint32_t server_opslimit, uint32_t server_memlimit, uint32_t server_threads,
+                                argon2_type type);
 
 
 #endif

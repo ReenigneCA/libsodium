@@ -40,7 +40,7 @@
  *  $argon2<T>[$v=<num>]$m=<num>,t=<num>,p=<num>$<bin>$<bin>
  *
  * where <T> is either 'i', <num> is a decimal integer (positive, fits in an
- * 'unsigned long') and <bin> is Base64-encoded data (no '=' padding characters,
+ * 'uint32_t') and <bin> is Base64-encoded data (no '=' padding characters,
  * no newline or whitespace).
  *
  * The last two binary chunks (encoded in Base64) are, in that order,
@@ -59,8 +59,8 @@ int
 argon2_decode_string(argon2_context *ctx, const char *str, argon2_type type)
 {
     int validation_result;
-    int out_loc=0;
-    int salt_loc=0;
+    int out_loc = 0;
+    int salt_loc = 0;
     size_t str_len;
     char argon_code[3];//"i" or "id" with space for null
 
@@ -70,18 +70,18 @@ argon2_decode_string(argon2_context *ctx, const char *str, argon2_type type)
 
     if (str_len == crypto_pwhash_argon2id_STRBYTES - 1)
         return ARGON2_DECODING_FAIL;
-    validation_result = sscanf(str, "$argon2%[^$]$v=%u$m=%u,t=%u,p=%u$%n%*[^$]$%n",argon_code, &version, &ctx->m_cost,
+    validation_result = sscanf(str, "$argon2%[^$]$v=%u$m=%u,t=%u,p=%u$%n%*[^$]$%n", argon_code, &version, &ctx->m_cost,
                                &ctx->t_cost, &ctx->lanes, &salt_loc, &out_loc);
     if (validation_result != 5)
         return ARGON2_DECODING_FAIL;
 
     switch (type) {
     case Argon2_id:
-        if (strcmp(argon_code,"id") != 0)
+        if (strcmp(argon_code, "id") != 0)
             return ARGON2_INCORRECT_PARAMETER;
         break;
     case Argon2_i:
-        if (strcmp(argon_code,"i") != 0)
+        if (strcmp(argon_code, "i") != 0)
             return ARGON2_INCORRECT_PARAMETER;
         break;
     default:
@@ -187,62 +187,127 @@ argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx,
  * TODO
  */
 int
-argon2_encode_relief_server_str_portion(char *dst, size_t dst_len,
-                                        unsigned char *const server_hash, unsigned long long server_hashlen,
-                                        unsigned long long server_opslimit, size_t server_memlimit)
+argon2_encode_relief_server_str(uint8_t out[crypto_pwhash_argon2id_relief_STRBYTES], const uint8_t *client_str,
+                                size_t client_str_len,
+                                unsigned char *const server_hash, size_t server_hashlen,
+                                uint32_t server_opslimit, uint32_t server_memlimit, uint32_t server_threads, argon2_type type)
 {
-    char int_buf[U32_STR_MAXSIZE];
-#define add_str(str) do{                \
-      size_t str_len = strlen(str);     \
-      if (str_len > dst_len)            \
-            return ARGON2_ENCODING_FAIL;\
-      dst_len -= str_len;               \
-      memcpy(dst,str,str_len);          \
-      dst += str_len;                   \
-} while(0)
+    int last_delim_loc = client_str_len;
+    int server_hash_loc = 0;
 
-#define add_int(ival) do{               \
-      u32_to_string(int_buf,ival);      \
-      add_str(int_buf);                 \
-    } while(0)
-    add_str("$argon2id$v=");
-    add_int(ARGON2_VERSION_NUMBER);
-    add_str("$m=");
-    add_int(server_memlimit/1024);
-    add_str(",t=");
-    add_int(server_opslimit);
-    add_str(",p=1$");
-    char buf[192];
+    const char *type_code;
+    switch (type) {
+    case Argon2_id:
+        type_code = "id";
+        break;
+    case Argon2_i:
+        type_code = "i";
+        break;
+    default:
+        return ARGON2_INCORRECT_TYPE;
+    }
 
-    sprintf(buf,"argon2id$v=%u$m=%zu,t=%llu,p=1$%s",ARGON2_VERSION_NUMBER,server_memlimit,server_opslimit,"base64_stuff");
-//    puts(buf);
 
-    if(sodium_bin2base64(dst,dst_len,server_hash,server_hashlen,sodium_base64_VARIANT_ORIGINAL_NO_PADDING)==NULL)
+    out[0] = 'r';
+    while (last_delim_loc > 0 && client_str[last_delim_loc] != '$')
+        last_delim_loc--;
+    memcpy(&out[1], client_str, last_delim_loc);
+
+    server_hash_loc = sprintf(&out[last_delim_loc + 1], ":$argon2%s$v=%u$m=%u,t=%u,p=%u$", type_code,
+                              ARGON2_VERSION_NUMBER, server_memlimit, server_opslimit, server_threads);
+    server_hash_loc += last_delim_loc+1;
+
+    if (sodium_bin2base64(&out[server_hash_loc], crypto_pwhash_argon2id_relief_STRBYTES-server_hash_loc,
+                          server_hash, server_hashlen, sodium_base64_VARIANT_ORIGINAL_NO_PADDING) == NULL)
         return ARGON2_ENCODING_FAIL;
     return ARGON2_OK;
 }
 
 /*
- * #define RDELIMN(var, str, start_loc, token, n) do{   \
-    var = 0;\
-    size_t count = n;\
-    for (size_t i = start_loc - 1; i > 0; --i) {\
-        if (str[i] == token && --count==0) {\
-            var = i;\
-            break;\
-        }\
-    } \
-    } while (0)
-
-#define DELIMN(var, str, start_loc, token, n) do{   \
-    var = 0;\
-    size_t count = n;\
-    for (size_t i = start_loc - 1; i < crypto_pwhash_argon2id_relief_STRBYTES; ++i) {\
-        if (str[i] == token && --count==0) {\
-            var = i;\
-            break;\
-        }\
-    } \
-    } while (0)
+ * returns the len of the generated string or a negative error code failure;
+ *
  */
 
+int argon2_relief_encode_init_string(char *dst, size_t dst_len, argon2_type type,
+                                     const unsigned char *salt,
+                                     size_t salt_len,
+                                     unsigned long long client_opslimit,
+                                     size_t client_memlimit)
+{
+    int result_len = 0;
+    const char *type_code;
+
+    if (client_memlimit > ARGON2_MAX_MEMORY || client_memlimit < ARGON2_MIN_MEMORY ||
+        client_opslimit > ARGON2_MAX_TIME || client_opslimit < ARGON2_MIN_TIME ||
+        salt_len > ARGON2_MAX_SALT_LENGTH || salt_len < ARGON2_MIN_SALT_LENGTH)
+        return ARGON2_INCORRECT_PARAMETER;
+
+    memset(dst, 0, dst_len);
+
+    switch (type) {
+    case Argon2_i:
+        type_code = "i";
+        break;
+    case Argon2_id:
+        type_code = "id";
+        break;
+    default:
+        return ARGON2_INCORRECT_TYPE;
+    }
+
+    //ri for relief init then the format is like regular argon2 strs but no hash
+    result_len = snprintf(dst, dst_len, "ri$argon2%s$v=%u$m=%u,t=%u,p=1$", type_code, ARGON2_VERSION_NUMBER,
+                          client_memlimit, client_opslimit);
+    sodium_bin2base64(&dst[result_len], dst_len - result_len, salt, salt_len,
+                      sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+    return result_len - 1 + sodium_base64_ENCODED_LEN(salt_len, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+}
+
+int argon2_relief_decode_init_string(argon2_context *ctx, const char *str, argon2_type type)
+{
+    size_t str_len = strnlen(str, crypto_pwhash_argon2id_STRBYTES);
+    char type_code[4];
+    int argon2_version;
+    int scan_result;
+    size_t salt_len;
+    int salt_loc;
+
+    if (str_len == crypto_pwhash_argon2id_STRBYTES) {
+        return ARGON2_DECODING_FAIL;
+    }
+    scan_result = sscanf(str, "ri$argon2%3[^$]$v=%u$m=%u,t=%u,p=%u$%n", &type_code, &argon2_version, &ctx->m_cost,
+                         &ctx->t_cost, &ctx->lanes, &salt_loc);
+    if (scan_result != 4)
+        return ARGON2_DECODING_FAIL;
+    switch (type) {
+    case Argon2_i:
+        if (strcmp(type_code, "i") != 0)
+            return ARGON2_INCORRECT_TYPE;
+        break;
+    case Argon2_id:
+        if (strcmp(type_code, "id") != 0)
+            return ARGON2_INCORRECT_TYPE;
+        break;
+    default:
+        return ARGON2_INCORRECT_TYPE;
+    }
+
+    if (argon2_version != ARGON2_VERSION_NUMBER)
+        return ARGON2_INCORRECT_TYPE;
+    ctx->threads = ctx->lanes;
+
+    salt_len = ((str_len - salt_loc) * 3) / 4;
+
+    if (ctx->m_cost > ARGON2_MAX_MEMORY || ctx->m_cost < ARGON2_MIN_MEMORY ||
+        ctx->t_cost > ARGON2_MAX_TIME || ctx->t_cost < ARGON2_MIN_TIME ||
+        salt_len > ARGON2_MAX_SALT_LENGTH || salt_len < ARGON2_MIN_SALT_LENGTH)
+        return ARGON2_INCORRECT_PARAMETER;
+
+    if (ctx->saltlen < salt_len)
+        return ARGON2_DECODING_LENGTH_FAIL;
+
+    sodium_bin2base64(&str[salt_loc], salt_len, ctx->salt, ctx->saltlen, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+
+    return ARGON2_OK;
+
+}

@@ -163,10 +163,12 @@ crypto_pwhash_str(char out[crypto_pwhash_STRBYTES],
 int
 crypto_pwhash_relief_str(char out[crypto_pwhash_relief_STRBYTES],
                   const char * const pwhash_str,
+                  uint8_t salt[crypto_pwhash_argon2id_SALTBYTES],
                   unsigned long long client_opslimit, size_t client_memlimit,
                   unsigned long long server_opslimit, size_t server_memlimit)
 {
     return crypto_pwhash_argon2id_relief_str(out, pwhash_str,
+                                      salt,
                                       client_opslimit, client_memlimit,
                                       server_opslimit, server_memlimit);
 }
