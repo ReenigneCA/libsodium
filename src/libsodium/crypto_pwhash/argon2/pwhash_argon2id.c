@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "argon2-core.h"
 #include "argon2.h"
@@ -325,65 +326,9 @@ crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTE
                                   unsigned long long client_opslimit, size_t client_memlimit,
                                   unsigned long long server_opslimit, size_t server_memlimit)
 {
-    argon2_context ctx;
-    int decode_result;
-    int fast_pwhash_result;
 
-    char server_hash[32];
-
-    size_t encoded_len;
-    size_t last_out_delim_loc = 0;
-    size_t sub_str_hash_loc = 0;
-    size_t sub_str_salt_loc = 0;
-    size_t sub_str_hash_len = 0;
-
-
-    out[0] = 'r';
-    memset(++out, 0, crypto_pwhash_argon2id_relief_STRBYTES - 1);
-    memset(&ctx, 0, sizeof ctx);
-
-    ctx.pwd = NULL;
-    ctx.pwdlen = 0;
-    ctx.secret = NULL;
-    ctx.secretlen = 0;
-
-    /* max values, to be updated in argon2_decode_string */
-    encoded_len = strlen(pwhash_str);
-    if (encoded_len > UINT32_MAX) {
-        return ARGON2_DECODING_LENGTH_FAIL;
-    }
-    ctx.adlen = (uint32_t) encoded_len;
-    ctx.saltlen = (uint32_t) encoded_len;
-    ctx.outlen = crypto_pwhash_argon2id_STRBYTES;
-
-    ctx.ad = (uint8_t *) malloc(ctx.adlen);
-    ctx.salt = (uint8_t *) malloc(ctx.saltlen);
-    ctx.out = (uint8_t *) malloc(crypto_pwhash_argon2id_STRBYTES);
-    if (!ctx.out || !ctx.salt || !ctx.ad) {
-        free(ctx.ad);
-        free(ctx.salt);
-        free(ctx.out);
-        return ARGON2_MEMORY_ALLOCATION_ERROR;
-    }
-
-    decode_result = argon2_decode_string(&ctx, pwhash_str, Argon2_id);
-    free(ctx.ad);
-
-    if (decode_result != ARGON2_OK) {
-        free(ctx.salt);
-        free(ctx.out);
-        return decode_result;
-    }
-    if (ctx.m_cost != client_memlimit || ctx.t_cost != client_opslimit) {
-        free(ctx.salt);
-        free(ctx.out);
-        return ARGON2_INCORRECT_PARAMETER;
-    }
-    last_out_delim_loc = crypto_pwhash_argon2id_relief_STRBYTES;
-    while (pwhash_str[last_out_delim_loc--] != '$');
-
-    memcpy(out, pwhash_str, last_out_delim_loc);
-    out[last_out_delim_loc++] = ':';
+    "$argon2id$v=19$m=%zu,t=2,p=%llu$"
+    sscanf(pwhash_str, "$argon2")
 
     fast_pwhash_result = crypto_pwhash_argon2id((unsigned char *)server_hash, 32, (const char *) ctx.out, ctx.outlen, ctx.salt,
                                                 server_opslimit, server_memlimit,
