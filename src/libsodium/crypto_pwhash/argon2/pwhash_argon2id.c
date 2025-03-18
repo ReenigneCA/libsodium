@@ -262,12 +262,7 @@ int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STR
     size_t pwhash_str_len;
 
 
-    memset(&ctx, 0, sizeof ctx);
-
-    ctx.pwd = NULL;
-    ctx.pwdlen = 0;
-    ctx.secret = NULL;
-    ctx.secretlen = 0;
+    memset(&ctx, 0, sizeof(ctx));
 
     /* max values, to be updated in argon2_decode_string */
     pwhash_str_len = strnlen(pwhash_str, crypto_pwhash_argon2id_STRBYTES);
@@ -275,11 +270,10 @@ int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STR
         return ARGON2_DECODING_LENGTH_FAIL;
     }
 
-    ctx.adlen = 0;
+
     ctx.saltlen = crypto_pwhash_argon2id_SALTBYTES;
     ctx.outlen = STR_HASHBYTES;
 
-    ctx.ad = NULL;
     ctx.salt = saltbuf;
     ctx.out = client_hash;
 
@@ -302,14 +296,94 @@ int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STR
     if (fast_pwhash_result != 0)
         return fast_pwhash_result;
 
-    return argon2_encode_relief_server_str(out, pwhash_str, pwhash_str_len, (uint8_t *) client_hash, STR_HASHBYTES,
+    return argon2_encode_relief_server_str(out, pwhash_str, pwhash_str_len, (uint8_t *) server_hash, STR_HASHBYTES,
                                            server_opslimit, server_memlimit / 1024, server_threads, Argon2_id);
 
 
 }
 
 int crypto_pwhash_argon2id_relief_str_verify(const char *relief_str, const char* client_str){
-    return -1;
+
+    int decode_result;
+    int relief_str_client_delim_loc;
+    int server_hash_loc;
+    int salt_loc;
+    int client_hash_loc;
+    int scan_loc;
+    int client_str_len;
+    int relief_str_len;
+    int fast_pwhash_result;
+
+    uint32_t version,memlimit,opslimit,threads;
+    int num_decoded_vals = 0;
+
+    uint8_t salt_buf[crypto_pwhash_argon2id_SALTBYTES];
+    uint8_t client_hash_buf[STR_HASHBYTES];
+    uint8_t server_hash_buf[STR_HASHBYTES];
+    uint8_t calc_server_hash_buf[STR_HASHBYTES];
+
+    relief_str_len = strnlen(relief_str,crypto_pwhash_argon2id_relief_STRBYTES);
+    scan_loc = relief_str_len;
+    while(scan_loc > 0 && relief_str[scan_loc] != '$')
+        scan_loc--;
+    server_hash_loc = scan_loc+1;
+
+    while(scan_loc > 0 && relief_str[scan_loc] != ':')
+        scan_loc--;
+    relief_str_client_delim_loc = scan_loc;
+
+    //this ensures the client hasn't used incorrect params
+    if (memcmp(&relief_str[1],client_str,relief_str_client_delim_loc-1)!= 0)
+        return ARGON2_INCORRECT_PARAMETER;
+
+    while(scan_loc > 0 && relief_str[scan_loc] != '$')
+        scan_loc--;
+    salt_loc = scan_loc+1;
+    client_str_len = strnlen(client_str,crypto_pwhash_argon2id_STRBYTES);
+    scan_loc = client_str_len;
+    while(scan_loc > 0 && client_str[scan_loc] != '$')
+        scan_loc--;
+    client_hash_loc = scan_loc+1;
+
+
+
+    num_decoded_vals = sscanf(&relief_str[relief_str_client_delim_loc+1],"$argon2id$v=%u$m=%u,t=%u,p=%u$",&version,&memlimit,&opslimit,&threads);
+    if (num_decoded_vals != 4)
+        return ARGON2_DECODING_FAIL;
+    memlimit = memlimit*1024;
+    if (version != ARGON2_VERSION_NUMBER ||
+        memlimit < crypto_pwhash_argon2id_MEMLIMIT_MIN || memlimit > crypto_pwhash_argon2id_MEMLIMIT_MAX ||
+        opslimit < crypto_pwhash_argon2id_OPSLIMIT_MIN || opslimit > crypto_pwhash_argon2id_OPSLIMIT_MAX)
+        return ARGON2_INCORRECT_PARAMETER;
+
+    size_t bin_len;
+    if (sodium_base642bin(client_hash_buf, STR_HASHBYTES,
+                          &client_str[client_hash_loc],client_str_len-client_hash_loc,
+                          NULL, &bin_len, NULL, sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0)
+        return ARGON2_DECODING_FAIL;
+
+    if (sodium_base642bin(salt_buf, crypto_pwhash_argon2id_SALTBYTES,
+                          &relief_str[salt_loc],relief_str_client_delim_loc-salt_loc,
+                          NULL, &bin_len, NULL, sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0)
+        return ARGON2_DECODING_FAIL;
+    if (sodium_base642bin(server_hash_buf, STR_HASHBYTES,
+                          &relief_str[server_hash_loc],relief_str_len-server_hash_loc,
+                          NULL, &bin_len, NULL, sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0)
+        return ARGON2_DECODING_FAIL;
+
+    fast_pwhash_result = crypto_pwhash_argon2id((uint8_t *) calc_server_hash_buf, STR_HASHBYTES, client_hash_buf,
+                                                STR_HASHBYTES, salt_buf, opslimit, memlimit,
+                                                crypto_pwhash_argon2id_ALG_ARGON2ID13);
+
+    if (fast_pwhash_result != ARGON2_OK)
+        return fast_pwhash_result;
+
+    if (memcmp(calc_server_hash_buf,server_hash_buf,STR_HASHBYTES) != 0){
+        errno = EINVAL;
+        return -1;
+    }
+
+
     return ARGON2_OK;
 }
 
