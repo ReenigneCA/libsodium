@@ -195,13 +195,54 @@ int crypto_pwhash_argon2id_salt_str(char out[crypto_pwhash_argon2id_STRBYTES], c
 }
 
 int
-crypto_pwhash_argon2id_relief_server_init_str(char out[crypto_pwhash_argon2id_STRBYTES], const char *const relief_str)
+crypto_pwhash_argon2id_relief_server_init_str(uint8_t out[crypto_pwhash_argon2id_STRBYTES],
+                                              uint8_t saltout[crypto_pwhash_argon2id_SALTBYTES],
+                                              unsigned long long client_opslimit, size_t client_memlimit){
+
+    randombytes(saltout,crypto_pwhash_argon2id_SALTBYTES);
+
+    return argon2_relief_encode_init_str(out,crypto_pwhash_argon2id_STRBYTES,Argon2_id,saltout,crypto_pwhash_argon2id_SALTBYTES,
+                                         client_opslimit,client_memlimit/1024);
+
+}
+
+
+int
+crypto_pwhash_argon2id_relief_server_auth_param_str(char out[crypto_pwhash_argon2id_STRBYTES], const char *const relief_str)
 {
+    int delim_loc =crypto_pwhash_argon2id_STRBYTES;
 
-    memset(out, 0, crypto_pwhash_argon2id_STRBYTES);
-
+    while(delim_loc > 0 && relief_str[delim_loc] != ':')
+        delim_loc--;
+    if (delim_loc <= 0)
+        return ARGON2_DECODING_FAIL;
+    memcpy(out,relief_str,delim_loc);
+    memset(&out[delim_loc], 0, crypto_pwhash_argon2id_STRBYTES-delim_loc);
 
     return 0;
+}
+
+int
+crypto_pwhash_argon2id_relief_client_str(char out[crypto_pwhash_argon2id_STRBYTES],uint8_t* passwd,
+                                             size_t passwdlen,
+                                             uint8_t server_init_str[crypto_pwhash_argon2id_STRBYTES]){
+    argon2_context ctx;
+    int decode_result;
+    uint8_t salt_buf[crypto_pwhash_argon2id_SALTBYTES];
+    uint8_t hash_buf[STR_HASHBYTES];
+
+    memset(&ctx,0,sizeof(ctx));
+    ctx.saltlen = crypto_pwhash_argon2id_SALTBYTES;
+    ctx.salt = salt_buf;
+    ctx.out = hash_buf;
+    ctx.outlen = STR_HASHBYTES;
+
+    decode_result = argon2_relief_decode_init_string(&ctx,server_init_str,Argon2_id);
+    if(decode_result != ARGON2_OK)
+        return decode_result;
+
+    return crypto_pwhash_argon2id_salt_str(out,passwd,passwdlen,ctx.salt,ctx.t_cost,ctx.m_cost*1024);
+
 }
 
 int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTES], const char *const pwhash_str,
@@ -266,6 +307,12 @@ int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STR
 
 
 }
+
+int crypto_pwhash_argon2id_relief_str_verify(const char *relief_str, const char* client_str){
+    return -1;
+    return ARGON2_OK;
+}
+
 
 int crypto_pwhash_argon2id_str_verify(const char *str, const char *const passwd, unsigned long long passwdlen)
 {

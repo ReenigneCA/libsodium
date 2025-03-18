@@ -118,11 +118,44 @@ crypto_pwhash_argon2id_salt_str(char out[crypto_pwhash_argon2id_STRBYTES],
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
 
 SODIUM_EXPORT
-int crypto_pwhash_argon2id_relief_server_init_str(char out[crypto_pwhash_argon2id_STRBYTES],const char * relief_str)
+int crypto_pwhash_argon2id_relief_server_auth_param_str(char out[crypto_pwhash_argon2id_STRBYTES], const char * relief_str)
 __attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
 
 SODIUM_EXPORT
-int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTES],
+int
+crypto_pwhash_argon2id_relief_server_init_str(uint8_t out[crypto_pwhash_argon2id_STRBYTES],
+                                              uint8_t saltout[crypto_pwhash_argon2id_SALTBYTES],
+                                              unsigned long long client_opslimit, size_t client_memlimit)
+__attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int
+crypto_pwhash_argon2id_relief_client_str(char out[crypto_pwhash_argon2id_STRBYTES],uint8_t* passwd,
+                                         size_t passwdlen,
+                                         uint8_t server_init_str[crypto_pwhash_argon2id_STRBYTES])
+__attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTES], const char *const pwhash_str,
+                                      uint8_t salt[crypto_pwhash_argon2id_SALTBYTES],
+                                      unsigned long long client_opslimit, size_t client_memlimit,
+                                      unsigned long long server_opslimit,
+                                      size_t server_memlimit)
+__attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int
+crypto_pwhash_argon2id_relief_server_auth_param_str(char out[crypto_pwhash_argon2id_STRBYTES], const char *const relief_str)
+__attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int
+crypto_pwhash_argon2id_relief_str_verify(const char *relief_str, const char* client_str)
+__attribute__ ((warn_unused_result)) __attribute__ ((nonnull));
+
+SODIUM_EXPORT
+int
+crypto_pwhash_argon2id_relief_str(char out[crypto_pwhash_argon2id_relief_STRBYTES],
                                       const char *const pwhash_str,
                                       uint8_t salt[crypto_pwhash_argon2id_SALTBYTES],
                                       unsigned long long client_opslimit, size_t client_memlimit,

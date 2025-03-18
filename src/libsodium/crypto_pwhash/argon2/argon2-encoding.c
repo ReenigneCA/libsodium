@@ -2,6 +2,7 @@
 #include "argon2-core.h"
 #include "utils.h"
 #include "crypto_pwhash_argon2id.h"
+#include "randombytes.h"
 #include <limits.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -228,7 +229,8 @@ argon2_encode_relief_server_str(uint8_t out[crypto_pwhash_argon2id_relief_STRBYT
  *
  */
 
-int argon2_relief_encode_init_string(char *dst, size_t dst_len, argon2_type type,
+
+int argon2_relief_encode_init_str(char *dst, size_t dst_len, argon2_type type,
                                      const unsigned char *salt,
                                      size_t salt_len,
                                      unsigned long long client_opslimit,
@@ -256,7 +258,7 @@ int argon2_relief_encode_init_string(char *dst, size_t dst_len, argon2_type type
     }
 
     //ri for relief init then the format is like regular argon2 strs but no hash
-    result_len = snprintf(dst, dst_len, "ri$argon2%s$v=%u$m=%u,t=%u,p=1$", type_code, ARGON2_VERSION_NUMBER,
+    result_len = snprintf(dst, dst_len, "r$argon2%s$v=%u$m=%u,t=%u,p=1$", type_code, ARGON2_VERSION_NUMBER,
                           client_memlimit, client_opslimit);
     sodium_bin2base64(&dst[result_len], dst_len - result_len, salt, salt_len,
                       sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
@@ -275,9 +277,9 @@ int argon2_relief_decode_init_string(argon2_context *ctx, const char *str, argon
     if (str_len == crypto_pwhash_argon2id_STRBYTES) {
         return ARGON2_DECODING_FAIL;
     }
-    scan_result = sscanf(str, "ri$argon2%3[^$]$v=%u$m=%u,t=%u,p=%u$%n", &type_code, &argon2_version, &ctx->m_cost,
+    scan_result = sscanf(str, "r$argon2%3[^$]$v=%u$m=%u,t=%u,p=%u$%n", &type_code, &argon2_version, &ctx->m_cost,
                          &ctx->t_cost, &ctx->lanes, &salt_loc);
-    if (scan_result != 4)
+    if (scan_result != 5)
         return ARGON2_DECODING_FAIL;
     switch (type) {
     case Argon2_i:
@@ -296,18 +298,21 @@ int argon2_relief_decode_init_string(argon2_context *ctx, const char *str, argon
         return ARGON2_INCORRECT_TYPE;
     ctx->threads = ctx->lanes;
 
-    salt_len = ((str_len - salt_loc) * 3) / 4;
+    salt_len = str_len - salt_loc;
 
     if (ctx->m_cost > ARGON2_MAX_MEMORY || ctx->m_cost < ARGON2_MIN_MEMORY ||
         ctx->t_cost > ARGON2_MAX_TIME || ctx->t_cost < ARGON2_MIN_TIME ||
         salt_len > ARGON2_MAX_SALT_LENGTH || salt_len < ARGON2_MIN_SALT_LENGTH)
         return ARGON2_INCORRECT_PARAMETER;
 
-    if (ctx->saltlen < salt_len)
+    if (ctx->saltlen < salt_len*3/4)
         return ARGON2_DECODING_LENGTH_FAIL;
+    size_t bin_len;
 
-    sodium_bin2base64(&str[salt_loc], salt_len, ctx->salt, ctx->saltlen, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+    if(sodium_base642bin(ctx->salt,ctx->saltlen,&str[salt_loc], salt_len, NULL,&bin_len,NULL, sodium_base64_VARIANT_ORIGINAL_NO_PADDING) != 0)
+        return ARGON2_DECODING_FAIL;
 
     return ARGON2_OK;
 
 }
+

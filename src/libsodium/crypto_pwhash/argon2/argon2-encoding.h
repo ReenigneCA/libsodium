@@ -30,14 +30,21 @@ int argon2_encode_string(char *dst, size_t dst_len, argon2_context *ctx,
  *
  * Returned value is ARGON2_OK on success.
  */
-int argon2_decode_string(argon2_context *ctx, const char *str,
+int
+argon2_decode_string(argon2_context *ctx, const char *str,
                          argon2_type type);
 
-int argon2_relief_encode_init_str(char *dst, size_t dst_len, argon2_type type,
+int
+argon2_relief_encode_init_str(char *dst, size_t dst_len, argon2_type type,
                                   const unsigned char * salt,
                                   size_t salt_len,
                                   unsigned long long client_opslimit,
                                   size_t client_memlimit);
+
+int
+argon2_encode_server_init_str(uint8_t out[crypto_pwhash_argon2id_relief_STRBYTES],
+                              uint8_t saltout[crypto_pwhash_argon2id_SALTBYTES],
+                              unsigned long long client_opslimit, size_t client_memlimit);
 
 /*
  *
@@ -50,5 +57,8 @@ argon2_encode_relief_server_str(uint8_t out[crypto_pwhash_argon2id_relief_STRBYT
                                 uint32_t server_opslimit, uint32_t server_memlimit, uint32_t server_threads,
                                 argon2_type type);
 
+
+int
+argon2_relief_decode_init_string(argon2_context *ctx, const char *str, argon2_type type);
 
 #endif
